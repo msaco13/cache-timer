@@ -1,0 +1,13 @@
+{
+  "name": "cache-timer",
+  "description": "Prompt cache warm/cold countdown band for Claude Code",
+  "owner": {
+    "name": "msaco13"
+  },
+  "plugins": [
+    {
+      "name": "cache-timer",
+      "source": "./"
+    }
+  ]
+}
