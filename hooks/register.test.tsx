@@ -52,6 +52,44 @@ test('no request yet, then warm with time left, warning, then cold', async ($, o
   await phone.unmount()
 })
 
+test('cost estimate: 200K tokens on Opus 5.5 with a 1h cache', async ($, on) => {
+  const now = { t: T0 }
+  on('clock.now', () => ({ value: now.t }))
+  stubStep(on)
+  // 200,000 tokens: warm = 0.2M x $0.20 = $0.04; cold 1h write = 0.2M x $4 x 2 = $1.60
+  await stepAt($, {
+    input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 199_000, cache_creation_input_tokens: 1_000,
+    ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 1_000, model: 'claude-opus-5-5',
+  })
+  now.t = T0 + 30 * 60_000
+  const warm = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect((await warm.find({ type: 'Text', text: /ctx/ }))?.text).toContain('200K ctx: $0.04 warm / $1.60 if cold (est.)')
+  await warm.unmount()
+
+  now.t = T0 + 61 * 60_000
+  const cold = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect((await cold.find({ type: 'Text', text: /re-caches/ }))?.text).toContain('re-caches 200K tokens ≈ $1.60 (vs $0.04 warm, est.)')
+  await cold.unmount()
+})
+
+test('compact mode shows a dot and the time only', async ($, on) => {
+  const now = { t: T0 }
+  on('clock.now', () => ({ value: now.t }))
+  on('store.set', () => ({ value: undefined }))
+  stubStep(on)
+  await stepAt($, usage(0, 3000))
+  await $.command.run({ command: 'cache-timer', args: 'compact', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } })
+  now.t = T0 + 10 * 60_000
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text' }))?.text).toBe('● 50:00')
+  await ui.unmount()
+
+  now.t = T0 + 61 * 60_000
+  const cold = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect((await cold.find({ type: 'Text' }))?.text).toBe('● cold')
+  await cold.unmount()
+})
+
 test('a 5m write shows the shorter lifetime', async ($, on) => {
   const now = { t: T0 }
   on('clock.now', () => ({ value: now.t }))
